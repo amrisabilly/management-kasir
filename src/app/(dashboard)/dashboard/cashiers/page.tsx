@@ -46,7 +46,7 @@ export default function CashiersPage() {
   };
 
   const handleEdit = (cashier: User) => {
-    setFormData({ name: cashier.name, email: cashier.email, role: cashier.role });
+    setFormData({ name: cashier.name, email: cashier.email, role: 'cashier' });
     setEditingId(cashier.id);
     setShowForm(true);
   };

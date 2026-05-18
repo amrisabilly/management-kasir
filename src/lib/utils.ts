@@ -21,7 +21,7 @@ export const exportToPDF = (data: unknown[], filename: string, columns: string[]
   // Add table
   const tableData = data.map(item => 
     columns.map(col => {
-      const value = item[col];
+      const value = (item as Record<string, unknown>)[col];
       if (value instanceof Date) {
         return value.toLocaleDateString('id-ID');
       }
@@ -36,7 +36,8 @@ export const exportToPDF = (data: unknown[], filename: string, columns: string[]
     })
   );
 
-  (doc as jsPDF).autoTable({
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (doc as any).autoTable({
     head: [columns],
     body: tableData,
     startY: 30,

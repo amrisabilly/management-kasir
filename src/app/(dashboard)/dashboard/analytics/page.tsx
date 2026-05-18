@@ -57,22 +57,22 @@ export default function AnalyticsPage() {
   // Payment method statistics
   const paymentStats = [
     {
-      method: 'Tunai',
-      amount: mockTransactions
+      name: 'Tunai',
+      value: mockTransactions
         .filter((t) => t.paymentMethod === 'cash')
         .reduce((sum, t) => sum + t.amount, 0),
       count: mockTransactions.filter((t) => t.paymentMethod === 'cash').length,
     },
     {
-      method: 'Kartu',
-      amount: mockTransactions
+      name: 'Kartu',
+      value: mockTransactions
         .filter((t) => t.paymentMethod === 'card')
         .reduce((sum, t) => sum + t.amount, 0),
       count: mockTransactions.filter((t) => t.paymentMethod === 'card').length,
     },
     {
-      method: 'Digital',
-      amount: mockTransactions
+      name: 'Digital',
+      value: mockTransactions
         .filter((t) => t.paymentMethod === 'digital')
         .reduce((sum, t) => sum + t.amount, 0),
       count: mockTransactions.filter((t) => t.paymentMethod === 'digital').length,
@@ -178,10 +178,10 @@ export default function AnalyticsPage() {
                 cx="50%"
                 cy="50%"
                 labelLine={false}
-                label={({ method, amount }) => `${method}: ${formatCurrency(amount)}`}
+                label={({ name, value }) => `${name}: ${formatCurrency(value)}`}
                 outerRadius={80}
                 fill="#8884d8"
-                dataKey="amount"
+                dataKey="value"
               >
                 {paymentStats.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
@@ -230,21 +230,21 @@ export default function AnalyticsPage() {
             <tbody>
               {paymentStats.map((stat, idx) => (
                 <tr
-                  key={stat.method}
+                  key={stat.name}
                   className={`border-b border-gray-200 ${
                     idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'
                   }`}
                 >
-                  <td className="px-6 py-4 font-semibold text-gray-800">{stat.method}</td>
+                  <td className="px-6 py-4 font-semibold text-gray-800">{stat.name}</td>
                   <td className="px-6 py-4 text-right text-gray-800">{stat.count}</td>
                   <td className="px-6 py-4 text-right font-semibold text-gray-800">
-                    {formatCurrency(stat.amount)}
+                    {formatCurrency(stat.value)}
                   </td>
                   <td className="px-6 py-4 text-right text-gray-800">
-                    {formatCurrency(stat.amount / stat.count)}
+                    {formatCurrency(stat.value / stat.count)}
                   </td>
                   <td className="px-6 py-4 text-right text-gray-800">
-                    {((stat.amount / totalRevenue) * 100).toFixed(2)}%
+                    {((stat.value / totalRevenue) * 100).toFixed(2)}%
                   </td>
                 </tr>
               ))}

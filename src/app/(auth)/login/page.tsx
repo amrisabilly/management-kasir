@@ -48,7 +48,7 @@ export default function LoginPage() {
       } else {
         setError('Email atau password salah');
       }
-    } catch (err) {
+    } catch {
       setError('Terjadi kesalahan saat login');
     } finally {
       setLoading(false);
