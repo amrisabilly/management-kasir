@@ -14,8 +14,6 @@ import {
   PieChart,
   Pie,
   Cell,
-  ScatterChart,
-  Scatter,
 } from 'recharts';
 import { mockChartData, mockTransactions, mockProducts } from '@/lib/mockData';
 import { formatCurrency, calculateHPP } from '@/lib/utils';

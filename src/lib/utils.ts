@@ -1,9 +1,9 @@
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
-import { Transaction, StockOpname } from '@/types';
+import { Transaction } from '@/types';
 
 // Export to Excel
-export const exportToExcel = (data: any[], filename: string) => {
+export const exportToExcel = (data: unknown[], filename: string) => {
   const worksheet = XLSX.utils.json_to_sheet(data);
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, 'Sheet1');
@@ -11,7 +11,7 @@ export const exportToExcel = (data: any[], filename: string) => {
 };
 
 // Export to PDF
-export const exportToPDF = (data: any[], filename: string, columns: string[]) => {
+export const exportToPDF = (data: unknown[], filename: string, columns: string[]) => {
   const doc = new jsPDF();
   
   // Add title
@@ -36,7 +36,7 @@ export const exportToPDF = (data: any[], filename: string, columns: string[]) =>
     })
   );
 
-  (doc as any).autoTable({
+  (doc as jsPDF).autoTable({
     head: [columns],
     body: tableData,
     startY: 30,

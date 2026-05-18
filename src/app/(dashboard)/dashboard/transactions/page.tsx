@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Download, FileText, Filter, Search } from 'lucide-react';
+import { FileText, Filter, Search } from 'lucide-react';
 import { mockTransactions } from '@/lib/mockData';
 import { formatCurrency, formatDate, exportToExcel, exportToPDF } from '@/lib/utils';
 

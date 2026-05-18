@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Plus, Save, X, AlertTriangle, Check } from 'lucide-react';
+import { Plus, Save, AlertTriangle, Check } from 'lucide-react';
 import { mockProducts, mockStockOpname } from '@/lib/mockData';
 import { StockOpname, StockOpnameItem } from '@/types';
 import { formatDate, formatCurrency, exportToExcel, exportToPDF } from '@/lib/utils';
@@ -9,7 +9,6 @@ import { formatDate, formatCurrency, exportToExcel, exportToPDF } from '@/lib/ut
 export default function StockOpnamePage() {
   const [stockOpnameList, setStockOpnameList] = useState<StockOpname[]>([mockStockOpname]);
   const [isCreating, setIsCreating] = useState(false);
-  const [editingItems, setEditingItems] = useState<Record<string, number>>({});
 
   const handleCreateStockOpname = () => {
     const newItems: StockOpnameItem[] = mockProducts.map((product) => ({

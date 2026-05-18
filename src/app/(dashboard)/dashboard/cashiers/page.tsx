@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Plus, Edit2, Trash2, Mail, Phone, Calendar, Shield } from 'lucide-react';
+import { Plus, Edit2, Trash2, Mail, Calendar, Shield } from 'lucide-react';
 import { mockCashiers } from '@/lib/mockData';
 import { User } from '@/types';
 import { formatDate } from '@/lib/utils';
