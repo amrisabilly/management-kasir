@@ -1,239 +1,369 @@
 'use client';
 
-import { useState } from 'react';
-import { Plus, Edit2, Trash2, Mail, Calendar, Shield } from 'lucide-react';
-import { mockCashiers } from '@/lib/mockData';
-import { User } from '@/types';
-import { formatDate } from '@/lib/utils';
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { useAuthStore } from '@/lib/store';
+import { Mail, Lock, Eye, EyeOff, Plus, Shield, ClipboardCheck, User, X, Edit2, Trash2 } from 'lucide-react';
 
 export default function CashiersPage() {
-  const [cashiers, setCashiers] = useState<User[]>(mockCashiers);
-  const [showForm, setShowForm] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  // State Kontrol Modal (Sesuai UI asli Anda)
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    role: 'kasir' as const,
-  });
 
-  const handleAddCashier = (e: React.FormEvent) => {
-    e.preventDefault();
+  // State Form Data untuk kebutuhan FastAPI Pydantic Model
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [username, setUsername] = useState('');
+  const [fullName, setFullName] = useState('');
+  const [role, setRole] = useState('kasir');
 
-    if (editingId) {
-      // Update existing
-      setCashiers(
-        cashiers.map((c) =>
-          c.id === editingId
-            ? { ...c, name: formData.name, email: formData.email }
-            : c
-        )
-      );
-      setEditingId(null);
-    } else {
-      // Add new
-      const newCashier: User = {
-        id: `cashier-${Date.now()}`,
-        name: formData.name,
-        email: formData.email,
-        role: 'kasir',
-        createdAt: new Date(),
-      };
-      setCashiers([...cashiers, newCashier]);
-    }
+  // State List Karyawan (Diinisialisasi sebagai array kosong, murni menggunakan data asli dari API)
+  const [cashiers, setCashiers] = useState<any[]>([]);
+  const [pageLoading, setPageLoading] = useState(true);
 
-    setFormData({ name: '', email: '', role: 'kasir' });
-    setShowForm(false);
-  };
+  const currentUser = useAuthStore((state) => state.user);
 
-  const handleEdit = (cashier: User) => {
-    setFormData({ name: cashier.name, email: cashier.email, role: 'kasir' });
-    setEditingId(cashier.id);
-    setShowForm(true);
-  };
-
-  const handleDelete = (id: string) => {
-    if (confirm('Apakah Anda yakin ingin menghapus kasir ini?')) {
-      setCashiers(cashiers.filter((c) => c.id !== id));
+  // 1. INTEGRASI GET: Memuat seluruh data karyawan dari server
+  const fetchEmployees = async () => {
+    try {
+      const response = await fetch('https://fastapi-kasir.vercel.app/api/users');
+      const result = await response.json();
+      if (response.ok && result.status === 'success') {
+        const mappedData = result.data.map((emp: any) => ({
+          id: emp.id,
+          name: emp.full_name,
+          email: emp.email || `${emp.username}@kasir.com`,
+          role: emp.role,
+          username: emp.username
+        }));
+        setCashiers(mappedData);
+      }
+    } catch (err) {
+      console.error('Gagal mengambil data dari server:', err);
+    } finally {
+      setPageLoading(false);
     }
   };
 
-  const handleCancel = () => {
-    setShowForm(false);
+  useEffect(() => {
+    fetchEmployees();
+  }, []);
+
+  // Buka Modal untuk Mode Tambah Staf Baru
+  const handleOpenAddModal = () => {
+    setIsEditMode(false);
     setEditingId(null);
-    setFormData({ name: '', email: '', role: 'kasir' });
+    setEmail('');
+    setPassword('');
+    setUsername('');
+    setFullName('');
+    setRole('kasir');
+    setError('');
+    setIsModalOpen(true);
+  };
+
+  // Buka Modal untuk Mode Edit Staf
+  const handleOpenEditModal = (cashier: any) => {
+    setIsEditMode(true);
+    setEditingId(cashier.id);
+    setEmail(cashier.email);
+    setPassword(''); // Password dikosongkan kecuali ingin diubah
+    setUsername(cashier.username);
+    setFullName(cashier.name);
+    setRole(cashier.role);
+    setError('');
+    setIsModalOpen(true);
+  };
+
+  // 2. INTEGRASI POST (Tambah) & PUT (Edit)
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+
+    try {
+      if (isEditMode && editingId) {
+        // Logika UPDATE/EDIT data ke FastAPI
+        const response = await fetch(`https://fastapi-kasir.vercel.app/api/users/${editingId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email,
+            username,
+            full_name: fullName,
+            role,
+            ...(password ? { password } : {}) // Hanya kirim password jika diisi
+          }),
+        });
+
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || 'Gagal memperbarui data karyawan');
+
+        if (data.status === 'success') {
+          setCashiers(cashiers.map(c => c.id === editingId ? { ...c, name: fullName, email, role, username } : c));
+          setIsModalOpen(false);
+        }
+      } else {
+        // Logika INSERT/TAMBAH data baru ke FastAPI
+        const response = await fetch('https://fastapi-kasir.vercel.app/create-user', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password, username, full_name: fullName, role }),
+        });
+
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || 'Gagal mendaftarkan karyawan baru');
+
+        if (data.status === 'success') {
+          const newCashier = {
+            id: data.data.user_id,
+            name: fullName,
+            email: email,
+            role: role,
+            username: username,
+          };
+          setCashiers([...cashiers, newCashier]);
+          setIsModalOpen(false);
+        }
+      }
+    } catch (err: any) {
+      setError(err.message || 'Terjadi kesalahan sistem');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 3. INTEGRASI DELETE: Menghapus akun karyawan
+  const handleDelete = async (id: string) => {
+    if (!confirm('Apakah Anda yakin ingin menghapus akun karyawan ini?')) return;
+
+    try {
+      const response = await fetch(`https://fastapi-kasir.vercel.app/api/users/${id}`, {
+        method: 'DELETE',
+      });
+      const data = await response.json();
+
+      if (!response.ok) throw new Error(data.detail || 'Gagal menghapus karyawan');
+
+      if (data.status === 'success') {
+        setCashiers(cashiers.filter(cashier => cashier.id !== id));
+      }
+    } catch (err: any) {
+      alert(err.message || 'Gagal menghapus data');
+    }
   };
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+    <div className="p-6">
+      {/* Header Section */}
+      <div className="flex justify-between items-center mb-6">
         <div>
-          <h1 className="text-3xl font-bold text-gray-800">Manajemen Kasir</h1>
-          <p className="text-gray-600 mt-1">Kelola data kasir dan akun mereka</p>
+          <h1 className="text-2xl font-bold text-gray-800">Manajemen Karyawan</h1>
+          <p className="text-gray-600">Kelola data kasir, supervisor, dan staf toko Anda</p>
         </div>
-        {!showForm && (
+        {/* Validasi Akses: Hanya manager yang boleh menambah/mengelola staf */}
+        {currentUser?.role === 'manager' && (
           <button
-            onClick={() => setShowForm(true)}
-            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded-lg transition-colors"
+            onClick={handleOpenAddModal}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition"
           >
             <Plus size={20} />
-            Tambah Kasir
+            Tambah Staf
           </button>
         )}
       </div>
 
-      {/* Add/Edit Form */}
-      {showForm && (
-        <div className="bg-white rounded-lg shadow-md p-6 border-l-4 border-blue-500">
-          <h2 className="text-xl font-bold text-gray-800 mb-4">
-            {editingId ? 'Edit Kasir' : 'Tambah Kasir Baru'}
-          </h2>
-          <form onSubmit={handleAddCashier} className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Nama Kasir
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={formData.name}
-                  onChange={(e) =>
-                    setFormData({ ...formData, name: e.target.value })
-                  }
-                  placeholder="Masukkan nama kasir"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Email
-                </label>
-                <input
-                  type="email"
-                  required
-                  value={formData.email}
-                  onChange={(e) =>
-                    setFormData({ ...formData, email: e.target.value })
-                  }
-                  placeholder="Masukkan email"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                />
-              </div>
-            </div>
-
-            <div className="flex gap-2">
-              <button
-                type="submit"
-                className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-2 rounded-lg transition-colors"
-              >
-                {editingId ? 'Simpan Perubahan' : 'Tambah Kasir'}
-              </button>
-              <button
-                type="button"
-                onClick={handleCancel}
-                className="flex-1 bg-gray-400 hover:bg-gray-500 text-white font-semibold py-2 rounded-lg transition-colors"
-              >
-                Batal
-              </button>
-            </div>
-          </form>
+      {currentUser?.role !== 'manager' && (
+        <div className="bg-amber-50 border border-amber-200 text-amber-800 text-sm px-4 py-3 rounded-lg mb-6">
+          *Anda login sebagai <strong>{currentUser?.role}</strong>. Akses manipulasi data (Tambah, Edit, Hapus) karyawan hanya diizinkan melalui akun ber-role <strong>manager</strong>.
         </div>
       )}
 
-      {/* Cashiers Table */}
-      <div className="bg-white rounded-lg shadow-md overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50 border-b border-gray-200">
+      {/* Tampilan Tabel Utama */}
+      <div className="bg-white rounded-xl shadow-xs border border-gray-200 overflow-hidden">
+        <table className="w-full text-left border-collapse">
+          <thead>
+            <tr className="bg-gray-50 border-b border-gray-200 text-gray-700 font-semibold">
+              <th className="p-4">Nama</th>
+              <th className="p-4">Username</th>
+              <th className="p-4">Email</th>
+              <th className="p-4">Role</th>
+              {currentUser?.role === 'manager' && <th className="p-4 text-center">Aksi</th>}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-200 text-gray-600">
+            {pageLoading ? (
               <tr>
-                <th className="px-6 py-3 text-left font-semibold text-gray-700">Nama</th>
-                <th className="px-6 py-3 text-left font-semibold text-gray-700">Email</th>
-                <th className="px-6 py-3 text-left font-semibold text-gray-700">Role</th>
-                <th className="px-6 py-3 text-left font-semibold text-gray-700">Bergabung</th>
-                <th className="px-6 py-3 text-center font-semibold text-gray-700">Aksi</th>
+                <td colSpan={currentUser?.role === 'manager' ? 5 : 4} className="p-4 text-center text-gray-400 animate-pulse">
+                  Memuat data karyawan dari server...
+                </td>
               </tr>
-            </thead>
-            <tbody>
-              {cashiers.map((cashier, idx) => (
-                <tr
-                  key={cashier.id}
-                  className={`border-b border-gray-200 hover:bg-gray-50 ${
-                    idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'
-                  }`}
-                >
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold">
-                        {cashier.name.charAt(0)}
-                      </div>
-                      <p className="font-semibold text-gray-800">{cashier.name}</p>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 text-gray-700 flex items-center gap-2">
-                    <Mail size={16} className="text-gray-400" />
-                    {cashier.email}
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-semibold capitalize flex items-center gap-1 w-fit">
-                      <Shield size={14} />
-                      {cashier.role}
+            ) : cashiers.length === 0 ? (
+              <tr>
+                <td colSpan={currentUser?.role === 'manager' ? 5 : 4} className="p-4 text-center text-gray-400">
+                  Belum ada data staf kasir, supervisor, atau karyawan terdaftar.
+                </td>
+              </tr>
+            ) : (
+              cashiers.map((cashier) => (
+                <tr key={cashier.id} className="hover:bg-gray-50 transition">
+                  <td className="p-4 font-medium text-gray-800">{cashier.name}</td>
+                  <td className="p-4">@{cashier.username}</td>
+                  <td className="p-4">{cashier.email}</td>
+                  <td className="p-4">
+                    <span
+                      className={`px-2 py-1 rounded-full text-xs font-semibold inline-flex items-center gap-1 ${
+                        cashier.role === 'manager'
+                          ? 'bg-purple-100 text-purple-700'
+                          : cashier.role === 'supervisor'
+                          ? 'bg-amber-100 text-amber-700'
+                          : 'bg-blue-100 text-blue-700'
+                      }`}
+                    >
+                      {cashier.role === 'manager' ? (
+                        <Shield size={12} />
+                      ) : cashier.role === 'supervisor' ? (
+                        <ClipboardCheck size={12} />
+                      ) : (
+                        <User size={12} />
+                      )}
+                      {cashier.role.charAt(0).toUpperCase() + cashier.role.slice(1)}
                     </span>
                   </td>
-                  <td className="px-6 py-4 text-gray-700 flex items-center gap-2">
-                    <Calendar size={16} className="text-gray-400" />
-                    {formatDate(cashier.createdAt)}
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center justify-center gap-2">
+                  {currentUser?.role === 'manager' && (
+                    <td className="p-4 text-center flex justify-center gap-3">
                       <button
-                        onClick={() => handleEdit(cashier)}
-                        className="p-2 text-blue-600 hover:bg-blue-100 rounded transition-colors"
-                        title="Edit"
+                        onClick={() => handleOpenEditModal(cashier)}
+                        className="text-blue-600 hover:text-blue-800 transition"
+                        title="Edit Data"
                       >
-                        <Edit2 size={18} />
+                        <Edit2 size={16} />
                       </button>
                       <button
                         onClick={() => handleDelete(cashier.id)}
-                        className="p-2 text-red-600 hover:bg-red-100 rounded transition-colors"
-                        title="Hapus"
+                        className="text-red-600 hover:text-red-800 transition"
+                        title="Hapus Akun"
                       >
-                        <Trash2 size={18} />
+                        <Trash2 size={16} />
                       </button>
-                    </div>
-                  </td>
+                    </td>
+                  )}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
 
-        {cashiers.length === 0 && (
-          <div className="text-center py-8 text-gray-500">
-            Tidak ada data kasir
+      {/* Modal Popup Form (Digunakan Bersama untuk Tambah / Edit Karyawan) */}
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl relative">
+            <button
+              onClick={() => setIsModalOpen(false)}
+              className="absolute right-4 top-4 text-gray-400 hover:text-gray-600"
+            >
+              <X size={20} />
+            </button>
+
+            <h2 className="text-xl font-bold text-gray-800 mb-4">
+              {isEditMode ? 'Edit Data Karyawan' : 'Tambah Staf Baru'}
+            </h2>
+
+            {error && (
+              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded-lg mb-4 text-sm">
+                {error}
+              </div>
+            )}
+
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Nama Lengkap</label>
+                <input
+                  type="text"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Nama Lengkap Karyawan"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Username</label>
+                <input
+                  type="text"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="username_karyawan"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Email</label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="staf@kasir.com"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">
+                  Password {isEditMode && <span className="text-xs font-normal text-gray-400">(Kosongkan jika tidak diubah)</span>}
+                </label>
+                <div className="relative">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="••••••••"
+                    required={!isEditMode}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600"
+                  >
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Role Jabatan</label>
+                <select
+                  value={role}
+                  onChange={(e) => setRole(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                >
+                  <option value="kasir">Kasir</option>
+                  <option value="supervisor">Supervisor</option>
+                </select>
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-semibold py-2 rounded-lg transition"
+              >
+                {loading ? 'Menyimpan...' : 'Simpan Perubahan'}
+              </button>
+            </form>
           </div>
-        )}
-      </div>
-
-      {/* Statistics */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <p className="text-gray-600 text-sm mb-2">Total Kasir</p>
-          <p className="text-3xl font-bold text-gray-800">{cashiers.length}</p>
         </div>
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <p className="text-gray-600 text-sm mb-2">Kasir Aktif</p>
-          <p className="text-3xl font-bold text-green-600">{cashiers.length}</p>
-        </div>
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <p className="text-gray-600 text-sm mb-2">Kasir Baru Bulan Ini</p>
-          <p className="text-3xl font-bold text-blue-600">
-            {cashiers.filter(
-              (c) => new Date().getMonth() === c.createdAt.getMonth()
-            ).length}
-          </p>
-        </div>
-      </div>
+      )}
     </div>
   );
 }
