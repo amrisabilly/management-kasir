@@ -3,7 +3,7 @@ export interface User {
   id: string;
   name: string;
   email: string;
-  role: 'admin' | 'cashier';
+  role: 'manager' | 'supervisor' | 'kasir'; // Diperbarui dari sebelumnya 'admin' | 'cashier'
   createdAt: Date;
 }
 
