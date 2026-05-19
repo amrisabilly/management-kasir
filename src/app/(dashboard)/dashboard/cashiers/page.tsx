@@ -1,9 +1,22 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/lib/store';
-import { Mail, Lock, Eye, EyeOff, Plus, Shield, ClipboardCheck, User, X, Edit2, Trash2 } from 'lucide-react';
+import { Eye, EyeOff, Plus, Shield, ClipboardCheck, User, X, Edit2, Trash2 } from 'lucide-react';
+
+interface Cashier {
+  id: string;
+  name: string;
+  email: string;
+  role: 'kasir' | 'supervisor' | 'manager';
+  username: string;
+}
+
+interface ApiResponse<T> {
+  status: 'success' | 'error';
+  data: T;
+  detail?: string;
+}
 
 export default function CashiersPage() {
   const [showPassword, setShowPassword] = useState(false);
@@ -23,22 +36,23 @@ export default function CashiersPage() {
   const [role, setRole] = useState('kasir');
 
   // State List Karyawan (Diinisialisasi sebagai array kosong, murni menggunakan data asli dari API)
-  const [cashiers, setCashiers] = useState<any[]>([]);
+  const [cashiers, setCashiers] = useState<Cashier[]>([]);
   const [pageLoading, setPageLoading] = useState(true);
 
   const currentUser = useAuthStore((state) => state.user);
 
   // 1. INTEGRASI GET: Memuat seluruh data karyawan dari server
+  // 1. INTEGRASI GET: Memuat seluruh data karyawan dari server
   const fetchEmployees = async () => {
     try {
       const response = await fetch('https://fastapi-kasir.vercel.app/api/users');
-      const result = await response.json();
+      const result: ApiResponse<{ id: string; full_name: string; email: string | null; role: string; username: string }[]> = await response.json();
       if (response.ok && result.status === 'success') {
-        const mappedData = result.data.map((emp: any) => ({
+        const mappedData: Cashier[] = result.data.map((emp) => ({
           id: emp.id,
           name: emp.full_name,
           email: emp.email || `${emp.username}@kasir.com`,
-          role: emp.role,
+          role: emp.role as 'kasir' | 'supervisor' | 'manager',
           username: emp.username
         }));
         setCashiers(mappedData);
@@ -68,7 +82,7 @@ export default function CashiersPage() {
   };
 
   // Buka Modal untuk Mode Edit Staf
-  const handleOpenEditModal = (cashier: any) => {
+  const handleOpenEditModal = (cashier: Cashier) => {
     setIsEditMode(true);
     setEditingId(cashier.id);
     setEmail(cashier.email);
@@ -101,11 +115,11 @@ export default function CashiersPage() {
           }),
         });
 
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.detail || 'Gagal memperbarui data karyawan');
+        const data: ApiResponse<unknown> = await response.json();
+        if (!response.ok) throw new Error((data as { detail?: string }).detail || 'Gagal memperbarui data karyawan');
 
         if (data.status === 'success') {
-          setCashiers(cashiers.map(c => c.id === editingId ? { ...c, name: fullName, email, role, username } : c));
+          setCashiers(cashiers.map(c => c.id === editingId ? { ...c, name: fullName, email, role: role as 'kasir' | 'supervisor' | 'manager', username } : c));
           setIsModalOpen(false);
         }
       } else {
@@ -116,23 +130,24 @@ export default function CashiersPage() {
           body: JSON.stringify({ email, password, username, full_name: fullName, role }),
         });
 
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.detail || 'Gagal mendaftarkan karyawan baru');
+        const data: ApiResponse<{ user_id: string }> = await response.json();
+        if (!response.ok) throw new Error((data as { detail?: string }).detail || 'Gagal mendaftarkan karyawan baru');
 
         if (data.status === 'success') {
-          const newCashier = {
+          const newCashier: Cashier = {
             id: data.data.user_id,
             name: fullName,
             email: email,
-            role: role,
+            role: role as 'kasir' | 'supervisor' | 'manager',
             username: username,
           };
           setCashiers([...cashiers, newCashier]);
           setIsModalOpen(false);
         }
       }
-    } catch (err: any) {
-      setError(err.message || 'Terjadi kesalahan sistem');
+    } catch (err) {
+      const error = err as Error;
+      setError(error.message || 'Terjadi kesalahan sistem');
     } finally {
       setLoading(false);
     }
@@ -146,15 +161,16 @@ export default function CashiersPage() {
       const response = await fetch(`https://fastapi-kasir.vercel.app/api/users/${id}`, {
         method: 'DELETE',
       });
-      const data = await response.json();
+      const data: ApiResponse<unknown> = await response.json();
 
-      if (!response.ok) throw new Error(data.detail || 'Gagal menghapus karyawan');
+      if (!response.ok) throw new Error((data as { detail?: string }).detail || 'Gagal menghapus karyawan');
 
       if (data.status === 'success') {
         setCashiers(cashiers.filter(cashier => cashier.id !== id));
       }
-    } catch (err: any) {
-      alert(err.message || 'Gagal menghapus data');
+    } catch (err) {
+      const error = err as Error;
+      alert(error.message || 'Gagal menghapus data');
     }
   };
 
