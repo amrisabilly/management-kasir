@@ -13,7 +13,7 @@ export default function CashiersPage() {
   const [formData, setFormData] = useState({
     name: '',
     email: '',
-    role: 'cashier' as const,
+    role: 'kasir' as const,
   });
 
   const handleAddCashier = (e: React.FormEvent) => {
@@ -35,18 +35,18 @@ export default function CashiersPage() {
         id: `cashier-${Date.now()}`,
         name: formData.name,
         email: formData.email,
-        role: 'cashier',
+        role: 'kasir',
         createdAt: new Date(),
       };
       setCashiers([...cashiers, newCashier]);
     }
 
-    setFormData({ name: '', email: '', role: 'cashier' });
+    setFormData({ name: '', email: '', role: 'kasir' });
     setShowForm(false);
   };
 
   const handleEdit = (cashier: User) => {
-    setFormData({ name: cashier.name, email: cashier.email, role: 'cashier' });
+    setFormData({ name: cashier.name, email: cashier.email, role: 'kasir' });
     setEditingId(cashier.id);
     setShowForm(true);
   };
@@ -60,7 +60,7 @@ export default function CashiersPage() {
   const handleCancel = () => {
     setShowForm(false);
     setEditingId(null);
-    setFormData({ name: '', email: '', role: 'cashier' });
+    setFormData({ name: '', email: '', role: 'kasir' });
   };
 
   return (

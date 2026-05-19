@@ -67,9 +67,10 @@ export default function LoginPage() {
       } else {
         setError('Respons data dari server tidak valid.');
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       // Mengambil pesan error dari backend FastAPI atau masalah jaringan offline
-      setError(err.message || 'Terjadi kesalahan saat mencoba masuk.');
+      const errorMessage = err instanceof Error ? err.message : 'Terjadi kesalahan saat mencoba masuk.';
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
