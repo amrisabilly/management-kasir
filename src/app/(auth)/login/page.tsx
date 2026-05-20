@@ -4,9 +4,9 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/lib/store';
 import { Mail, Lock, Eye, EyeOff } from 'lucide-react';
+import { authService } from '@/services/authService';
 
 export default function LoginPage() {
-  // Mengosongkan nilai default agar user mengisi mandiri, atau Anda bisa pasang kredensial uji coba Anda
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -22,53 +22,15 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      // Menghubungkan ke endpoint FastAPI yang telah Anda buat
-      // Jika sudah dideploy, ganti 'http://localhost:8000' dengan URL API Produksi Anda
-      const response = await fetch('https://fastapi-kasir.vercel.app/api/auth/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email, password }),
-      });
+      // Gunakan authService untuk handle login
+      const authenticatedUser = await authService.login({ email, password });
 
-      const data = await response.json();
+      // Simpan ke Zustand store
+      login(authenticatedUser);
 
-      // Jika FastAPI merespon dengan error (status code selain 2xx)
-      if (!response.ok) {
-        throw new Error(data.detail || 'Email atau password salah');
-      }
-
-      // Pastikan format response dari FastAPI sesuai sebelum dimasukkan ke state
-      if (data.status === 'success' && data.user) {
-        // Cek apakah user memiliki role manager
-        if (data.user.role !== 'manager') {
-          throw new Error('Hanya akun dengan role manager yang dapat mengakses website ini.');
-        }
-
-        const authenticatedUser = {
-          id: data.user.id,
-          name: data.user.name,
-          email: data.user.email,
-          role: data.user.role,
-          createdAt: new Date(),
-        };
-
-        // Simpan JWT access token dari Supabase ke localStorage untuk request data masa mendatang
-        if (data.token) {
-          localStorage.setItem('access_token', data.token);
-        }
-
-        // Panggil fungsi login dari Zustand untuk menyimpan session secara global
-        login(authenticatedUser);
-        
-        // Pindahkan halaman ke Dashboard utama
-        router.push('/dashboard');
-      } else {
-        setError('Respons data dari server tidak valid.');
-      }
+      // Redirect ke dashboard
+      router.push('/dashboard');
     } catch (err: unknown) {
-      // Mengambil pesan error dari backend FastAPI atau masalah jaringan offline
       const errorMessage = err instanceof Error ? err.message : 'Terjadi kesalahan saat mencoba masuk.';
       setError(errorMessage);
     } finally {
@@ -84,7 +46,7 @@ export default function LoginPage() {
           <div className="inline-flex items-center justify-center w-16 h-16 bg-white rounded-full mb-4 shadow-lg">
             <div className="text-2xl font-bold text-blue-600">₹</div>
           </div>
-          <h1 className="text-4xl font-bold text-white">Manager Kasir</h1>
+          <h1 className="text-4xl font-bold text-white">Manager Kasir</h1>  
           <p className="text-blue-100 mt-2">Sistem Manajemen Penjualan</p>
         </div>
 
@@ -169,6 +131,12 @@ export default function LoginPage() {
         {/* Footer */}
         <p className="text-center text-blue-100 text-sm mt-8">
           © 2026 Manager Kasir. Semua hak dilindungi.
+        </p>
+        <p className='text-center text-blue-100 text-sm mt-8'>
+          Info Login <br />
+          Username : admin@gmail.com <br />
+          Password : admin123 <br />
+          Untuk sistem sudah terintegrasi API Database menggunakan fast api dan supabase
         </p>
       </div>
     </div>
