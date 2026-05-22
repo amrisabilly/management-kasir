@@ -4,7 +4,15 @@ export interface User {
   name: string;
   email: string;
   role: 'manager' | 'supervisor' | 'kasir'; // Diperbarui dari sebelumnya 'admin' | 'cashier'
+  cafe_id?: string;
   createdAt: Date;
+}
+
+// API Response types
+export interface ApiResponse<T> {
+  status: 'success' | 'error';
+  data?: T;
+  message?: string;
 }
 
 // Transaction types

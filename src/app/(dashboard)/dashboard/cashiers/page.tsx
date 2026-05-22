@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuthStore } from '@/lib/store';
 import { Eye, EyeOff, Plus, Shield, ClipboardCheck, User, X, Edit2, Trash2 } from 'lucide-react';
 
@@ -20,7 +20,8 @@ interface ApiResponse<T> {
 
 export default function CashiersPage() {
   const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState('');
+  const [pageError, setPageError] = useState(''); // Error untuk halaman utama
+  const [modalError, setModalError] = useState(''); // Error untuk modal
   const [loading, setLoading] = useState(false);
 
   // State Kontrol Modal (Sesuai UI asli Anda)
@@ -40,12 +41,17 @@ export default function CashiersPage() {
   const [pageLoading, setPageLoading] = useState(true);
 
   const currentUser = useAuthStore((state) => state.user);
+  const activeCafeId = useAuthStore((state) => state.activeCafeId);
+  const cafeList = useAuthStore((state) => state.cafeList);
 
-  // 1. INTEGRASI GET: Memuat seluruh data karyawan dari server
-  // 1. INTEGRASI GET: Memuat seluruh data karyawan dari server
-  const fetchEmployees = async () => {
+  const activeCafe = cafeList.find(c => c.id === activeCafeId);
+
+  // 1. INTEGRASI GET: Memuat seluruh data karyawan dari server yang sesuai dengan cafe manager
+  const fetchEmployees = useCallback(async () => {
+    if (!activeCafeId) return; // Pastikan activeCafeId tersedia
+    setPageLoading(true); // Reset loading saat cafe berubah
     try {
-      const response = await fetch('https://fastapi-kasir.vercel.app/api/users');
+      const response = await fetch(`https://fastapi-kasir.vercel.app/api/users?cafe_id=${activeCafeId}`);
       const result: ApiResponse<{ id: string; full_name: string; email: string | null; role: string; username: string }[]> = await response.json();
       if (response.ok && result.status === 'success') {
         const mappedData: Cashier[] = result.data.map((emp) => ({
@@ -56,17 +62,23 @@ export default function CashiersPage() {
           username: emp.username
         }));
         setCashiers(mappedData);
+        setPageError(''); // Clear error jika berhasil
+      } else {
+        setPageError('Gagal memuat data karyawan');
+        setCashiers([]);
       }
     } catch (err) {
       console.error('Gagal mengambil data dari server:', err);
+      setPageError('Terjadi kesalahan saat memuat data karyawan');
+      setCashiers([]);
     } finally {
       setPageLoading(false);
     }
-  };
+  }, [activeCafeId]);
 
   useEffect(() => {
     fetchEmployees();
-  }, []);
+  }, [fetchEmployees]); // Re-fetch ketika fetchEmployees berubah (yang terjadi saat activeCafeId berubah)
 
   // Buka Modal untuk Mode Tambah Staf Baru
   const handleOpenAddModal = () => {
@@ -77,7 +89,7 @@ export default function CashiersPage() {
     setUsername('');
     setFullName('');
     setRole('kasir');
-    setError('');
+    setModalError('');
     setIsModalOpen(true);
   };
 
@@ -86,18 +98,18 @@ export default function CashiersPage() {
     setIsEditMode(true);
     setEditingId(cashier.id);
     setEmail(cashier.email);
-    setPassword(''); // Password dikosongkan kecuali ingin diubah
+    setPassword(''); 
     setUsername(cashier.username);
     setFullName(cashier.name);
     setRole(cashier.role);
-    setError('');
+    setModalError('');
     setIsModalOpen(true);
   };
 
   // 2. INTEGRASI POST (Tambah) & PUT (Edit)
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
+    setModalError('');
     setLoading(true);
 
     try {
@@ -121,13 +133,26 @@ export default function CashiersPage() {
         if (data.status === 'success') {
           setCashiers(cashiers.map(c => c.id === editingId ? { ...c, name: fullName, email, role: role as 'kasir' | 'supervisor' | 'manager', username } : c));
           setIsModalOpen(false);
+          setModalError('');
         }
       } else {
         // Logika INSERT/TAMBAH data baru ke FastAPI
+        // Pastikan activeCafeId ada sebelum tambah
+        if (!activeCafeId) {
+          throw new Error('Silakan pilih cabang terlebih dahulu di navbar (refresh halaman jika belum ada)');
+        }
+
         const response = await fetch('https://fastapi-kasir.vercel.app/create-user', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password, username, full_name: fullName, role }),
+          body: JSON.stringify({ 
+            email, 
+            password, 
+            username, 
+            full_name: fullName, 
+            role,
+            cafe_id: activeCafeId // Gunakan activeCafeId dari dropdown cabang
+          }),
         });
 
         const data: ApiResponse<{ user_id: string }> = await response.json();
@@ -143,11 +168,12 @@ export default function CashiersPage() {
           };
           setCashiers([...cashiers, newCashier]);
           setIsModalOpen(false);
+          setModalError('');
         }
       }
     } catch (err) {
       const error = err as Error;
-      setError(error.message || 'Terjadi kesalahan sistem');
+      setModalError(error.message || 'Terjadi kesalahan sistem');
     } finally {
       setLoading(false);
     }
@@ -155,7 +181,7 @@ export default function CashiersPage() {
 
   // 3. INTEGRASI DELETE: Menghapus akun karyawan
   const handleDelete = async (id: string) => {
-    if (!confirm('Apakah Anda yakin ingin menghapus akun karyawan ini?')) return;
+    if (!confirm('Apakah Anda yakin ingin menghapus akun karyawan ini dari ' + activeCafe?.name + '?')) return;
 
     try {
       const response = await fetch(`https://fastapi-kasir.vercel.app/api/users/${id}`, {
@@ -167,6 +193,7 @@ export default function CashiersPage() {
 
       if (data.status === 'success') {
         setCashiers(cashiers.filter(cashier => cashier.id !== id));
+        alert('Data karyawan berhasil dihapus dari ' + activeCafe?.name);
       }
     } catch (err) {
       const error = err as Error;
@@ -181,6 +208,9 @@ export default function CashiersPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-800">Manajemen Karyawan</h1>
           <p className="text-gray-600">Kelola data kasir, supervisor, dan staf toko Anda</p>
+          <p className="text-sm text-blue-600 font-medium mt-2">
+            📍 Cabang: <span className="font-semibold">{activeCafe?.name || 'Memilih cabang...'}</span>
+          </p>
         </div>
         {/* Validasi Akses: Hanya manager yang boleh menambah/mengelola staf */}
         {currentUser?.role === 'manager' && (
@@ -197,6 +227,12 @@ export default function CashiersPage() {
       {currentUser?.role !== 'manager' && (
         <div className="bg-amber-50 border border-amber-200 text-amber-800 text-sm px-4 py-3 rounded-lg mb-6">
           *Anda login sebagai <strong>{currentUser?.role}</strong>. Akses manipulasi data (Tambah, Edit, Hapus) karyawan hanya diizinkan melalui akun ber-role <strong>manager</strong>.
+        </div>
+      )}
+
+      {pageError && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-6 text-sm">
+          {pageError}
         </div>
       )}
 
@@ -291,9 +327,15 @@ export default function CashiersPage() {
               {isEditMode ? 'Edit Data Karyawan' : 'Tambah Staf Baru'}
             </h2>
 
-            {error && (
+            {!isEditMode && (
+              <div className="bg-blue-50 border border-blue-200 text-blue-700 px-3 py-2 rounded-lg mb-4 text-sm">
+                📍 Cabang: <strong>{activeCafe?.name}</strong>
+              </div>
+            )}
+
+            {modalError && (
               <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded-lg mb-4 text-sm">
-                {error}
+                {modalError}
               </div>
             )}
 

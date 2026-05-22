@@ -1,5 +1,6 @@
 // src/services/userService.ts
 import { api } from "./api";
+import type { ApiResponse, User } from "@/types";
 
 export interface UserPayload {
   email?: string;
@@ -7,46 +8,32 @@ export interface UserPayload {
   username?: string;
   full_name?: string;
   role?: string;
+  cafe_id?: string;
 }
 
-export interface Employee {
-  id: string;
-  full_name: string;
-  email: string | null;
-  role: string;
-  username: string;
-}
-
-export interface ApiResponse<T> {
-  status: 'success' | 'error';
-  data: T;
-  detail?: string;
-}
-
-export interface CreateUserResponse {
-  user_id: string;
+export interface EmployeeData extends User {
+  username?: string;
+  full_name?: string;
 }
 
 export const userService = {
-  // GET /api/users
-  getEmployees: async (): Promise<Employee[]> => {
-    const response = await api.get<ApiResponse<Employee[]>>("/api/users");
-    return response.data;
+  // GET: Mengambil data karyawan yang hanya berada di bawah naungan cafe milik Manager aktif
+  getEmployees: async (managerId: string) => {
+    return await api.get<ApiResponse<EmployeeData[]>>(`/api/users?manager_id=${managerId}`);
   },
 
-  // POST /create-user
-  createEmployee: async (data: UserPayload): Promise<CreateUserResponse> => {
-    const response = await api.post<ApiResponse<CreateUserResponse>>("/create-user", data);
-    return response.data;
+  // POST: Mendaftarkan karyawan baru dengan mengunci relasi cafe_id
+  createEmployee: async (data: UserPayload) => {
+    return await api.post<ApiResponse<EmployeeData>>("/create-user", data);
   },
 
-  // PUT /api/users/{id}
-  updateEmployee: async (userId: string, data: UserPayload): Promise<void> => {
-    await api.put<ApiResponse<unknown>>(`/api/users/${userId}`, data);
+  // PUT: Memperbarui data karyawan
+  updateEmployee: async (userId: string, data: UserPayload) => {
+    return await api.put<ApiResponse<EmployeeData>>(`/api/users/${userId}`, data);
   },
 
-  // DELETE /api/users/{id}
-  deleteEmployee: async (userId: string): Promise<void> => {
-    await api.delete<ApiResponse<unknown>>(`/api/users/${userId}`);
+  // DELETE: Menghapus akun karyawan dari sistem
+  deleteEmployee: async (userId: string) => {
+    return await api.delete<ApiResponse<void>>(`/api/users/${userId}`);
   }
 };
