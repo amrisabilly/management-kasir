@@ -1,11 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Plus, Save, AlertTriangle, Check, RefreshCw } from 'lucide-react';
 import { StockOpname, StockOpnameItem, Ingredient } from '@/types';
-import { formatDate, formatCurrency, exportToExcel, exportToPDF } from '@/lib/utils';
-// IMPORT API SERVICE ANDA (Sesuaikan path-nya)
-import { api } from '@/services/api'; 
+import { formatDate, formatCurrency } from '@/lib/utils'; 
 
 export default function StockOpnamePage() {
   const [stockOpnameList, setStockOpnameList] = useState<StockOpname[]>([]);

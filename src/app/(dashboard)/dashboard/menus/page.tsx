@@ -40,7 +40,6 @@ export default function MenusPage() {
   
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState('all');
-  const [isLoading, setIsLoading] = useState(false);
 
   // Modals Toggles
   const [isMenuModalOpen, setIsMenuModalOpen] = useState(false);
@@ -67,7 +66,6 @@ export default function MenusPage() {
 
   // Mengambil seluruh data awal (Menu, Kategori, Bahan Baku) dari FastAPI
   const fetchData = async () => {
-    setIsLoading(true);
     try {
       // DATA DUMMY KATEGORI
       const dummyCategories: Category[] = [
@@ -117,8 +115,6 @@ export default function MenusPage() {
       setMenus(dummyMenus);
     } catch (error) {
       console.error('Gagal mengambil data master menu:', error);
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -177,7 +173,7 @@ export default function MenusPage() {
   };
 
   // Mengubah isi baris resep tertentu (Dropdown bahan atau angka takaran)
-  const updateRecipeRow = (index: number, field: keyof RecipeItemInput, value: any) => {
+  const updateRecipeRow = (index: number, field: keyof RecipeItemInput, value: string | number) => {
     setRecipeItems(
       recipeItems.map((item, idx) =>
         idx === index ? { ...item, [field]: value } : item
