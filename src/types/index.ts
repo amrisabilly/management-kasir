@@ -3,7 +3,7 @@ export interface User {
   id: string;
   name: string;
   email: string;
-  role: 'manager' | 'supervisor' | 'kasir'; // Diperbarui dari sebelumnya 'admin' | 'cashier'
+  role: 'manager' | 'supervisor' | 'kasir'; 
   cafe_id?: string;
   createdAt: Date;
 }
@@ -45,24 +45,6 @@ export interface Product {
   category: string;
 }
 
-// Stock Opname types
-export interface StockOpname {
-  id: string;
-  date: Date;
-  products: StockOpnameItem[];
-  totalValue: number;
-  notes: string;
-}
-
-export interface StockOpnameItem {
-  productId: string;
-  productName: string;
-  systemStock: number;
-  physicalStock: number;
-  difference: number;
-  cost: number;
-}
-
 // Dashboard Analytics types
 export interface DashboardStats {
   totalRevenue: number;
@@ -77,8 +59,34 @@ export interface ChartData {
   transactions: number;
 }
 
-// Login types
 export interface LoginCredentials {
   email: string;
   password: string;
+}
+
+export interface Ingredient {
+  id: string;
+  name: string;
+  stock: number;
+  unit: string;
+  cost?: number; 
+}
+
+// Stock Opname types
+export interface StockOpname {
+  id: string;
+  date: Date;
+  products: StockOpnameItem[];
+  totalValue: number;
+  notes: string;
+}
+
+export interface StockOpnameItem {
+  ingredientId: string;
+  ingredientName: string;
+  unit: string;
+  systemStock: number;
+  physicalStock: number;
+  difference: number;
+  cost: number;
 }

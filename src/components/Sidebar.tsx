@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, BarChart3, ShoppingCart, Users, Package, LogOut, Menu, X } from 'lucide-react';
+import { Home, BarChart3, ShoppingCart, Users, Package, LogOut, Menu, X, Coffee } from 'lucide-react';
 import { useState } from 'react';
 import { useAuthStore } from '@/lib/store';
 
@@ -17,12 +17,15 @@ export const Sidebar = () => {
     { href: '/dashboard/analytics', icon: BarChart3, label: 'Analitik' },
     { href: '/dashboard/cashiers', icon: Users, label: 'Manajemen Kasir' },
     { href: '/dashboard/stock-opname', icon: Package, label: 'Stok Opname' },
+    { href: '/dashboard/ingredients', icon: Coffee, label: 'Bahan Baku' },
+    { href: '/dashboard/menus', icon: Package, label: 'Menu Jualan' },
   ];
 
   const isActive = (href: string) => pathname === href;
 
   return (
     <>
+
       {/* Mobile menu button */}
       <button
         onClick={() => setIsOpen(!isOpen)}

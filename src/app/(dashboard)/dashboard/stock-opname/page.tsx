@@ -1,44 +1,70 @@
 'use client';
 
-import { useState } from 'react';
-import { Plus, Save, AlertTriangle, Check } from 'lucide-react';
-import { mockProducts, mockStockOpname } from '@/lib/mockData';
-import { StockOpname, StockOpnameItem } from '@/types';
+import { useState, useEffect } from 'react';
+import { Plus, Save, AlertTriangle, Check, RefreshCw } from 'lucide-react';
+import { StockOpname, StockOpnameItem, Ingredient } from '@/types';
 import { formatDate, formatCurrency, exportToExcel, exportToPDF } from '@/lib/utils';
+// IMPORT API SERVICE ANDA (Sesuaikan path-nya)
+import { api } from '@/services/api'; 
 
 export default function StockOpnamePage() {
-  const [stockOpnameList, setStockOpnameList] = useState<StockOpname[]>([mockStockOpname]);
+  const [stockOpnameList, setStockOpnameList] = useState<StockOpname[]>([]);
   const [isCreating, setIsCreating] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleCreateStockOpname = () => {
-    const newItems: StockOpnameItem[] = mockProducts.map((product) => ({
-      productId: product.id,
-      productName: product.name,
-      systemStock: product.stock,
-      physicalStock: product.stock,
-      difference: 0,
-      cost: product.cost,
-    }));
+  // Fungsi untuk menarik data Bahan Baku dari Database (FastAPI)
+  const handleCreateStockOpname = async () => {
+    setIsCreating(true);
+    setIsLoading(true);
 
-    const totalValue = newItems.reduce((sum, item) => {
-      return sum + item.physicalStock * item.cost;
-    }, 0);
+    try {
+      // NANTI AKTIFKAN KODE INI JIKA ENDPOINT FASTAPI SUDAH SIAP
+      // const response = await api.get('/api/ingredients');
+      // const ingredientsData: Ingredient[] = response.data;
 
-    const newStockOpname: StockOpname = {
-      id: `so-${Date.now()}`,
-      date: new Date(),
-      products: newItems,
-      totalValue,
-      notes: '',
-    };
+      // SEMENTARA MENGGUNAKAN DATA DUMMY BAHAN BAKU
+      const ingredientsData: Ingredient[] = [
+        { id: 'ing-1', name: 'Biji Kopi Arabika', stock: 2500, unit: 'gram', cost: 150 },
+        { id: 'ing-2', name: 'Susu Segar Diamond', stock: 5000, unit: 'ml', cost: 20 },
+        { id: 'ing-3', name: 'Gula Aren Cair', stock: 1500, unit: 'ml', cost: 25 },
+        { id: 'ing-4', name: 'Gelas Plastik', stock: 150, unit: 'pcs', cost: 500 },
+      ];
 
-    setStockOpnameList([...stockOpnameList, newStockOpname]);
-    setIsCreating(false);
+      const newItems: StockOpnameItem[] = ingredientsData.map((ing) => ({
+        ingredientId: ing.id,
+        ingredientName: ing.name,
+        unit: ing.unit,
+        systemStock: ing.stock,
+        physicalStock: ing.stock, // Default disamakan dulu
+        difference: 0,
+        cost: ing.cost || 0,
+      }));
+
+      const totalValue = newItems.reduce((sum, item) => sum + item.physicalStock * item.cost, 0);
+
+      const newStockOpname: StockOpname = {
+        id: `SO-${Date.now()}`,
+        date: new Date(),
+        products: newItems,
+        totalValue,
+        notes: '',
+      };
+
+      // Tambahkan ke paling atas
+      setStockOpnameList([newStockOpname, ...stockOpnameList]);
+    } catch (error) {
+      console.error("Gagal mengambil data bahan baku:", error);
+      alert("Gagal memuat data bahan baku dari server.");
+    } finally {
+      setIsCreating(false);
+      setIsLoading(false);
+    }
   };
 
+  // Fungsi saat Manager mengetik angka stok fisik (Bisa Desimal)
   const handleUpdatePhysicalStock = (
     stockOpnameId: string,
-    productId: string,
+    ingredientId: string,
     physicalStock: number
   ) => {
     setStockOpnameList(
@@ -47,7 +73,7 @@ export default function StockOpnamePage() {
           ? {
               ...so,
               products: so.products.map((item) =>
-                item.productId === productId
+                item.ingredientId === ingredientId
                   ? {
                       ...item,
                       physicalStock,
@@ -55,8 +81,9 @@ export default function StockOpnamePage() {
                     }
                   : item
               ),
+              // Hitung ulang total nilai uangnya
               totalValue: so.products.reduce((sum, item) => {
-                if (item.productId === productId) {
+                if (item.ingredientId === ingredientId) {
                   return sum + physicalStock * item.cost;
                 }
                 return sum + item.physicalStock * item.cost;
@@ -67,160 +94,112 @@ export default function StockOpnamePage() {
     );
   };
 
-  const handleExportExcel = (so: StockOpname) => {
-    const data = so.products.map((item) => ({
-      'Kode Produk': item.productId,
-      'Nama Produk': item.productName,
-      'Stok Sistem': item.systemStock,
-      'Stok Fisik': item.physicalStock,
-      'Selisih': item.difference,
-      'Harga Pokok': formatCurrency(item.cost),
-      'Total Nilai': formatCurrency(item.physicalStock * item.cost),
-    }));
-
-    exportToExcel(data, `StokOpname_${formatDate(so.date)}`);
+  // Fungsi untuk menyimpan perubahan ke Database
+  const handleSaveToDatabase = async (so: StockOpname) => {
+    try {
+      alert(`Menyimpan data SO ${so.id} ke database... \n(Endpoint FastAPI belum aktif)`);
+      // NANTI AKTIFKAN KODE INI:
+      // await api.post('/api/stock-opname/save', {
+      //   stock_opname_id: so.id,
+      //   notes: so.notes,
+      //   items: so.items.map(i => ({
+      //     ingredient_id: i.ingredientId,
+      //     physical_stock: i.physicalStock
+      //   }))
+      // });
+      // alert('Stok Opname berhasil disimpan dan stok sistem telah diperbarui!');
+    } catch (error) {
+      console.error(error);
+      alert('Gagal menyimpan ke database');
+    }
   };
 
-  const handleExportPDF = (so: StockOpname) => {
-    const data = so.products.map((item) => ({
-      productId: item.productId,
-      productName: item.productName,
-      systemStock: item.systemStock,
-      physicalStock: item.physicalStock,
-      difference: item.difference,
-      cost: item.cost,
-    }));
-
-    exportToPDF(
-      data,
-      `Laporan_Stok_Opname_${formatDate(so.date)}`,
-      ['productId', 'productName', 'systemStock', 'physicalStock', 'difference']
-    );
-  };
+  // ... (Fungsi handleExportExcel dan handleExportPDF sama, cukup ganti .products jadi .items dan productName jadi ingredientName) ...
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-800">Stok Opname</h1>
-          <p className="text-gray-600 mt-1">Kelola dan verifikasi stok barang</p>
+          <h1 className="text-3xl font-bold text-gray-800">Stok Opname (Gudang)</h1>
+          <p className="text-gray-600 mt-1">Verifikasi stok fisik bahan baku dengan sistem</p>
         </div>
         {!isCreating && (
           <button
             onClick={handleCreateStockOpname}
-            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded-lg transition-colors"
+            disabled={isLoading}
+            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded-lg transition-colors disabled:bg-blue-400"
           >
-            <Plus size={20} />
-            Buat Stok Opname
+            {isLoading ? <RefreshCw className="animate-spin" size={20} /> : <Plus size={20} />}
+            Tarik Data Bahan Baku
           </button>
         )}
       </div>
 
-      {/* Stock Opname List */}
       <div className="space-y-6">
         {stockOpnameList.map((so) => (
           <div key={so.id} className="bg-white rounded-lg shadow-md overflow-hidden">
-            {/* Header */}
             <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <h2 className="text-xl font-bold">Stok Opname - {so.id}</h2>
+                  <h2 className="text-xl font-bold">Draft Opname: {so.id}</h2>
                   <p className="text-blue-100 mt-1">Tanggal: {formatDate(so.date)}</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-sm text-blue-100">Total Nilai Stok</p>
-                  <p className="text-2xl font-bold">
-                    {formatCurrency(so.totalValue)}
-                  </p>
+                  <p className="text-sm text-blue-100">Estimasi Nilai Aset</p>
+                  <p className="text-2xl font-bold">{formatCurrency(so.totalValue)}</p>
                 </div>
               </div>
             </div>
 
-            {/* Table */}
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead className="bg-gray-50 border-b border-gray-200">
                   <tr>
-                    <th className="px-6 py-3 text-left font-semibold text-gray-700">Produk</th>
-                    <th className="px-6 py-3 text-center font-semibold text-gray-700">
-                      Stok Sistem
-                    </th>
-                    <th className="px-6 py-3 text-center font-semibold text-gray-700">
-                      Stok Fisik
-                    </th>
-                    <th className="px-6 py-3 text-center font-semibold text-gray-700">
-                      Selisih
-                    </th>
-                    <th className="px-6 py-3 text-right font-semibold text-gray-700">
-                      Total Nilai
-                    </th>
-                    <th className="px-6 py-3 text-center font-semibold text-gray-700">
-                      Status
-                    </th>
+                    <th className="px-6 py-3 text-left font-semibold text-gray-700">Bahan Baku</th>
+                    <th className="px-6 py-3 text-center font-semibold text-gray-700">Satuan</th>
+                    <th className="px-6 py-3 text-center font-semibold text-gray-700">Sistem</th>
+                    <th className="px-6 py-3 text-center font-semibold text-gray-700">Fisik (Real)</th>
+                    <th className="px-6 py-3 text-center font-semibold text-gray-700">Selisih</th>
+                    <th className="px-6 py-3 text-center font-semibold text-gray-700">Status</th>
                   </tr>
                 </thead>
                 <tbody>
                   {so.products.map((item, idx) => (
-                    <tr
-                      key={item.productId}
-                      className={`border-b border-gray-200 ${
-                        idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'
-                      } hover:bg-blue-50`}
-                    >
+                    <tr key={item.ingredientId} className={`border-b ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
                       <td className="px-6 py-4">
-                        <div>
-                          <p className="font-semibold text-gray-800">
-                            {item.productName}
-                          </p>
-                          <p className="text-xs text-gray-500">{item.productId}</p>
-                        </div>
+                        <p className="font-semibold text-gray-800">{item.ingredientName}</p>
+                        <p className="text-xs text-gray-500">ID: {item.ingredientId}</p>
                       </td>
                       <td className="px-6 py-4 text-center">
-                        <p className="text-gray-800 font-semibold">
-                          {item.systemStock}
-                        </p>
+                        <span className="bg-gray-200 text-gray-700 px-2 py-1 rounded text-xs font-bold">
+                          {item.unit}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-center text-gray-800 font-semibold">
+                        {item.systemStock}
                       </td>
                       <td className="px-6 py-4 text-center">
                         <input
                           type="number"
+                          step="0.01" // PENTING: Izinkan input desimal (misal: 10.5 gram)
                           value={item.physicalStock}
-                          onChange={(e) =>
-                            handleUpdatePhysicalStock(
-                              so.id,
-                              item.productId,
-                              parseInt(e.target.value) || 0
-                            )
-                          }
-                          className="w-20 px-2 py-1 border border-gray-300 rounded text-center focus:ring-2 focus:ring-blue-500 outline-none"
+                          onChange={(e) => handleUpdatePhysicalStock(so.id, item.ingredientId, parseFloat(e.target.value) || 0)}
+                          className="w-24 px-2 py-1 border border-gray-300 rounded text-center focus:ring-2 focus:ring-blue-500 outline-none"
                         />
                       </td>
                       <td className="px-6 py-4 text-center">
-                        <p
-                          className={`font-semibold ${
-                            item.difference === 0
-                              ? 'text-gray-800'
-                              : item.difference > 0
-                              ? 'text-green-600'
-                              : 'text-red-600'
-                          }`}
-                        >
+                        <p className={`font-semibold ${item.difference === 0 ? 'text-gray-800' : item.difference > 0 ? 'text-green-600' : 'text-red-600'}`}>
                           {item.difference > 0 ? '+' : ''}{item.difference}
                         </p>
-                      </td>
-                      <td className="px-6 py-4 text-right text-gray-800 font-semibold">
-                        {formatCurrency(item.physicalStock * item.cost)}
                       </td>
                       <td className="px-6 py-4 text-center">
                         {item.difference === 0 ? (
                           <span className="inline-flex items-center gap-1 px-3 py-1 bg-green-100 text-green-800 rounded-full text-xs font-semibold">
-                            <Check size={14} />
-                            Cocok
+                            <Check size={14} /> Cocok
                           </span>
                         ) : (
                           <span className="inline-flex items-center gap-1 px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs font-semibold">
-                            <AlertTriangle size={14} />
-                            Selisih
+                            <AlertTriangle size={14} /> Selisih
                           </span>
                         )}
                       </td>
@@ -230,78 +209,28 @@ export default function StockOpnamePage() {
               </table>
             </div>
 
-            {/* Actions and Notes */}
             <div className="bg-gray-50 border-t border-gray-200 p-6">
               <div className="mb-4">
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Catatan
-                </label>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Catatan Audit</label>
                 <textarea
                   value={so.notes}
-                  onChange={(e) => {
-                    // Update notes
-                    setStockOpnameList(
-                      stockOpnameList.map((item) =>
-                        item.id === so.id
-                          ? { ...item, notes: e.target.value }
-                          : item
-                      )
-                    );
-                  }}
-                  placeholder="Tambahkan catatan tentang stok opname..."
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none resize-none"
-                  rows={3}
+                  onChange={(e) => setStockOpnameList(stockOpnameList.map(item => item.id === so.id ? { ...item, notes: e.target.value } : item))}
+                  placeholder="Misal: Biji kopi tumpah 100 gram saat shift pagi..."
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none resize-none"
+                  rows={2}
                 />
               </div>
-
-              <div className="flex gap-2">
-                <button
-                  onClick={() => handleExportExcel(so)}
-                  className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white font-semibold px-4 py-2 rounded-lg transition-colors"
+              <div className="flex justify-end gap-2">
+                <button 
+                  onClick={() => handleSaveToDatabase(so)}
+                  className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-2 rounded-lg transition-colors"
                 >
-                  Export Excel
-                </button>
-                <button
-                  onClick={() => handleExportPDF(so)}
-                  className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white font-semibold px-4 py-2 rounded-lg transition-colors"
-                >
-                  Export PDF
-                </button>
-                <button className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded-lg transition-colors ml-auto">
-                  <Save size={20} />
-                  Simpan
+                  <Save size={20} /> Simpan ke Database
                 </button>
               </div>
             </div>
           </div>
         ))}
-      </div>
-
-      {/* Summary Statistics */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <p className="text-gray-600 text-sm mb-2">Total Stok Opname</p>
-          <p className="text-3xl font-bold text-gray-800">{stockOpnameList.length}</p>
-        </div>
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <p className="text-gray-600 text-sm mb-2">Total Nilai Stok</p>
-          <p className="text-3xl font-bold text-gray-800">
-            {formatCurrency(
-              stockOpnameList.reduce((sum, so) => sum + so.totalValue, 0)
-            )}
-          </p>
-        </div>
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <p className="text-gray-600 text-sm mb-2">Total Selisih Item</p>
-          <p className="text-3xl font-bold text-red-600">
-            {stockOpnameList.reduce(
-              (sum, so) =>
-                sum +
-                so.products.filter((item) => item.difference !== 0).length,
-              0
-            )}
-          </p>
-        </div>
       </div>
     </div>
   );
