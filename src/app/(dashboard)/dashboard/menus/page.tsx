@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Plus, Edit2, Trash2, Search, X, Save, Coffee, Layers, Eye, EyeOff, CheckSquare, Square, Trash } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
-// import { api } from '@/services/api'; // Aktifkan jika integrasi API sudah berjalan
+import { api } from '@/services/api';
+import { useAuthStore } from '@/lib/store';
 
 // Interface Lokal untuk Manajemen Menu & Resep
 interface Category {
@@ -41,6 +42,9 @@ export default function MenusPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState('all');
 
+  // Get activeCafeId dari Zustand store
+  const activeCafeId = useAuthStore((state) => state.activeCafeId);
+
   // Modals Toggles
   const [isMenuModalOpen, setIsMenuModalOpen] = useState(false);
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
@@ -65,75 +69,89 @@ export default function MenusPage() {
   const [recipeItems, setRecipeItems] = useState<RecipeItemInput[]>([]);
 
   // Mengambil seluruh data awal (Menu, Kategori, Bahan Baku) dari FastAPI
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
-      // DATA DUMMY KATEGORI
-      const dummyCategories: Category[] = [
-        { id: 'cat-1', name: 'Coffee (Hot/Ice)' },
-        { id: 'cat-2', name: 'Non-Coffee' },
-        { id: 'cat-3', name: 'Makanan Utama' },
-      ];
+      if (!activeCafeId) {
+        return;
+      }
 
-      // DATA DUMMY BAHAN BAKU (Untuk dipilih di bagian resep)
-      const dummyIngredients: Ingredient[] = [
-        { id: 'ing-1', name: 'Biji Kopi Arabika', unit: 'gram' },
-        { id: 'ing-2', name: 'Susu Segar Diamond', unit: 'ml' },
-        { id: 'ing-3', name: 'Gula Aren Cair', unit: 'ml' },
-        { id: 'ing-4', name: 'Gelas Plastik', unit: 'pcs' },
-      ];
+      // 1. Fetch Kategori
+      const catRes = await api.get<{ data: Category[] } | Category[]>(`/api/kategori/?cafe_id=${activeCafeId}`);
+      const categoriesData = Array.isArray(catRes.data) ? catRes.data : catRes.data.data || [];
+      setCategories(categoriesData);
 
-      // DATA DUMMY MENU JUALAN
-      const dummyMenus: Menu[] = [
-        {
-          id: 'menu-1',
-          name: 'Es Kopi Susu Aren',
-          description: 'Espresso dengan susu segar dan sirup gula aren murni.',
-          price: 22000,
-          categoryId: 'cat-1',
-          isAvailable: true,
-          trackStock: true,
-          recipe: [
-            { ingredientId: 'ing-1', quantity: 18 },
-            { ingredientId: 'ing-2', quantity: 120 },
-            { ingredientId: 'ing-3', quantity: 20 },
-            { ingredientId: 'ing-4', quantity: 1 },
-          ],
-        },
-        {
-          id: 'menu-2',
-          name: 'Air Mineral Botol',
-          description: 'Air mineral kemasan 600ml.',
-          price: 5000,
-          categoryId: 'cat-2',
-          isAvailable: true,
-          trackStock: false, // OPSI BYPASS: Jual langsung tanpa hitung resep
-        },
-      ];
+      // 2. Fetch Master Bahan Baku
+      const ingRes = await api.get<{ data: Ingredient[] }>(`/api/ingredients/?cafe_id=${activeCafeId}`);
+      setIngredients(ingRes.data.data || []);
 
-      setCategories(dummyCategories);
-      setIngredients(dummyIngredients);
-      setMenus(dummyMenus);
-    } catch (error) {
+      // 3. Fetch Menu beserta array resepnya
+      interface RecipeIngredient {
+        ingredient_id?: string;
+        ingredientId?: string;
+        quantity?: number;
+      }
+      interface MenuResponse {
+        id: string;
+        name: string;
+        description?: string;
+        price?: number;
+        category_id?: string;
+        categoryId?: string;
+        is_available?: boolean;
+        track_stock?: boolean;
+        recipe_ingredients?: RecipeIngredient[];
+      }
+      const menuRes = await api.get<{ data: MenuResponse[] }>(`/api/menus/?cafe_id=${activeCafeId}`);
+      const mappedMenus = (menuRes.data.data || []).map((m: MenuResponse) => ({
+        id: m.id,
+        name: m.name,
+        description: m.description || '',
+        price: m.price || 0,
+        categoryId: m.category_id || m.categoryId || '',
+        isAvailable: m.is_available !== false,
+        trackStock: m.track_stock === true,
+        // Map data resep dari relasi
+        recipe: m.recipe_ingredients 
+          ? m.recipe_ingredients.map((r: RecipeIngredient) => ({
+              ingredientId: r?.ingredient_id || r?.ingredientId || '',
+              quantity: r?.quantity || 0
+            }))
+          : []
+      }));
+      setMenus(mappedMenus);
+    } catch (error: unknown) {
       console.error('Gagal mengambil data master menu:', error);
     }
-  };
+  }, [activeCafeId]);
 
   useEffect(() => {
-    fetchData();
-  }, []);
+    if (activeCafeId) {
+      fetchData();
+    }
+  }, [activeCafeId, fetchData]);
 
   // Handler Tambah Kategori Baru
-  const handleSaveCategory = (e: React.FormEvent) => {
+  const handleSaveCategory = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!categoryName.trim()) return;
 
-    const newCat: Category = {
-      id: `cat-${Date.now()}`,
-      name: categoryName,
-    };
-    setCategories([...categories, newCat]);
-    setCategoryName('');
-    setIsCategoryModalOpen(false);
+    try {
+      if (!activeCafeId) {
+        alert('Error: Silakan pilih cafe terlebih dahulu');
+        return;
+      }
+
+      await api.post('/api/kategori/', {
+        cafe_id: activeCafeId,
+        name: categoryName
+      });
+      setIsCategoryModalOpen(false);
+      setCategoryName('');
+      fetchData(); // Refresh list
+    } catch (err: unknown) {
+      console.error('Gagal menyimpan kategori:', err);
+      alert('Gagal menyimpan kategori');
+    }
   };
 
   // Membuka Modal Pembuatan Menu Baru
@@ -187,29 +205,80 @@ export default function MenusPage() {
   };
 
   // Submit Simpan Form Menu (POST/PUT)
-  const handleSaveMenu = (e: React.FormEvent) => {
+  const handleSaveMenu = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!menuForm.name.trim()) return;
-
-    const completeMenuData: Menu = {
-      id: editingMenu ? editingMenu.id : `menu-${Date.now()}`,
-      ...menuForm,
-      recipe: menuForm.trackStock ? recipeItems : undefined,
-    };
-
-    if (editingMenu) {
-      setMenus(menus.map((m) => (m.id === editingMenu.id ? completeMenuData : m)));
-    } else {
-      setMenus([...menus, completeMenuData]);
+    
+    // Validasi input wajib
+    if (!menuForm.name.trim()) {
+      alert('Nama menu wajib diisi!');
+      return;
+    }
+    if (!menuForm.categoryId) {
+      alert('Silakan pilih kategori terlebih dahulu!');
+      return;
+    }
+    if (menuForm.price <= 0) {
+      alert('Harga jual harus lebih besar dari 0!');
+      return;
     }
 
-    setIsMenuModalOpen(false);
+    try {
+      if (!activeCafeId) {
+        alert('ID Kafe tidak ditemukan. Silakan login ulang.');
+        return;
+      }
+
+      // Mempersiapkan payload data sesuai skema CreateMenuRequest di FastAPI
+      const payload = {
+        cafe_id: activeCafeId,
+        category_id: menuForm.categoryId,
+        name: menuForm.name,
+        description: menuForm.description || null,
+        price: Number(menuForm.price),
+        is_available: menuForm.isAvailable,
+        track_stock: menuForm.trackStock,
+        // Jika trackStock true, kirim array recipe, jika false kirim array kosong
+        recipe: menuForm.trackStock 
+          ? recipeItems.map((item) => ({
+              ingredient_id: item.ingredientId,
+              quantity: Number(item.quantity),
+            }))
+          : [],
+      };
+
+      if (editingMenu) {
+        // JIKA EDIT MENU (Nanti arahkan ke PUT endpoint jika sudah dibuat di FastAPI)
+        alert('Fitur edit menu akan segera terhubung. Sementara simpan sebagai menu baru.');
+      } else {
+        // TAMBAH MENU BARU
+        const response = await api.post('/api/menus/', payload);
+        
+        if (response.data.status === 'success') {
+          alert(`Menu "${menuForm.name}" berhasil ditambahkan ke kasir!`);
+        }
+      }
+
+      // Tutup modal dan refresh data dari database
+      setIsMenuModalOpen(false);
+      fetchData(); 
+      
+    } catch (error: unknown) {
+      console.error('Gagal menyimpan menu:', error);
+      const errorMsg = error instanceof Error && 'response' in error && typeof error.response === 'object' && error.response !== null && 'data' in error.response && typeof error.response.data === 'object' && error.response.data !== null && 'detail' in error.response.data ? (error.response.data as { detail: string }).detail : 'Terjadi kesalahan pada server.';
+      alert(`Gagal menyimpan menu: ${errorMsg}`);
+    }
   };
 
   // Hapus Menu
-  const handleDeleteMenu = (id: string) => {
+  const handleDeleteMenu = async (id: string) => {
     if (confirm('Apakah Anda yakin ingin menghapus produk jualan ini?')) {
-      setMenus(menus.filter((m) => m.id !== id));
+      try {
+        await api.delete(`/api/menus/${id}`);
+        setMenus(menus.filter((m) => m.id !== id));
+      } catch (err: unknown) {
+        console.error('Gagal menghapus menu:', err);
+        alert('Gagal menghapus menu');
+      }
     }
   };
 

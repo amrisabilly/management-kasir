@@ -1,33 +1,73 @@
 // src/services/api.ts
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://fastapi-kasir.vercel.app";
+import axios, { AxiosInstance } from 'axios';
 
-async function fetchWithAuth<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-  // Ambil token dari localStorage atau state management Anda
-  const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://fastapi-kasir.vercel.app';
 
-  const headers = {
-    "Content-Type": "application/json",
-    ...(token && { Authorization: `Bearer ${token}` }),
-    ...options.headers,
-  };
+// Buat instance axios dengan baseURL
+export const api: AxiosInstance = axios.create({
+  baseURL: BASE_URL,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
 
-  const response = await fetch(`${BASE_URL}${endpoint}`, {
-    ...options,
-    headers,
-  });
-
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error((errorData as { detail?: string }).detail || "Terjadi kesalahan pada server");
+// Otomatis menempelkan token jika ada
+api.interceptors.request.use((config) => {
+  if (typeof window !== 'undefined') {
+    const token = localStorage.getItem('token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
   }
+  console.log('API Request:', {
+    url: `${config.baseURL}${config.url}`,
+    method: config.method,
+    hasToken: !!config.headers.Authorization,
+  });
+  return config;
+});
 
-  return response.json();
-}
+// Handle error response (misal token expired)
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    // Log network/server errors
+    console.error('API Error Details:', {
+      message: error.message,
+      code: error.code,
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      data: error.response?.data,
+      url: error.config?.url,
+    });
 
-export const api = {
-  get: <T,>(endpoint: string) => fetchWithAuth<T>(endpoint, { method: "GET" }),
-  post: <T,>(endpoint: string, body: unknown) => fetchWithAuth<T>(endpoint, { method: "POST", body: JSON.stringify(body) }),
-  put: <T,>(endpoint: string, body: unknown) => fetchWithAuth<T>(endpoint, { method: "PUT", body: JSON.stringify(body) }),
-  delete: <T,>(endpoint: string) => fetchWithAuth<T>(endpoint, { method: "DELETE" }),
-};
+    if (error.response?.status === 401) {
+      // Token expired atau invalid
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        window.location.href = '/login';
+      }
+    }
+
+    // Handle network errors
+    if (error.code === 'ERR_NETWORK' || !error.response) {
+      const networkErr = new Error('Network Error - Pastikan API Server sedang berjalan') as Error & { response?: unknown; detail?: string };
+      networkErr.response = error.response;
+      networkErr.detail = error.message;
+      throw networkErr;
+    }
+
+    // Throw error dengan format yang lebih baik untuk client
+    const errorResponse = error.response?.data || {};
+    const err = new Error(
+      typeof errorResponse === 'object' && errorResponse !== null && 'detail' in errorResponse
+        ? (errorResponse as { detail: string }).detail
+        : error.message || 'Terjadi kesalahan pada server'
+    ) as Error & { response?: unknown; detail?: string | null };
+    err.response = error.response;
+    err.detail = typeof errorResponse === 'object' && errorResponse !== null && 'detail' in errorResponse ? (errorResponse as { detail: string }).detail : null;
+    throw err;
+  }
+);

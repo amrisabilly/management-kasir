@@ -1,5 +1,6 @@
 // src/services/authService.ts
 import { api } from './api';
+import { useAuthStore } from '@/lib/store';
 
 export interface LoginPayload {
   email: string;
@@ -30,7 +31,10 @@ interface LoginResponse {
 
 export const authService = {
   login: async (payload: LoginPayload): Promise<AuthUser> => {
-    const data = await api.post<LoginResponse>('/api/auth/login', payload);
+    const response = await api.post<LoginResponse>('/api/auth/login', payload);
+    const data = response.data;
+
+    console.log('Login Response dari API:', data);
 
     if (data.status !== 'success' || !data.user) {
       throw new Error('Respons data dari server tidak valid.');
@@ -40,27 +44,55 @@ export const authService = {
       throw new Error('Hanya akun dengan role manager yang dapat mengakses website ini.');
     }
 
+    // Simpan token ke localStorage
     if (data.token) {
-      localStorage.setItem('access_token', data.token);
+      localStorage.setItem('token', data.token);
     }
 
-    // Return authenticated user beserta cafe_id
-    return {
+    const user = {
       id: data.user.id,
       name: data.user.name,
       email: data.user.email,
       role: data.user.role,
-      cafe_id: data.user.cafe_id, // TAMBAHAN: Teruskan ke store
+      cafe_id: data.user.cafe_id || '', // Handle undefined cafe_id
       createdAt: new Date(),
     };
+
+    console.log('User data sebelum disimpan:', user);
+    
+    // Simpan ke localStorage
+    localStorage.setItem('user', JSON.stringify(user));
+    
+    // Set ke Zustand store (ini akan trigger update di ingredients page)
+    useAuthStore.getState().login(user);
+    
+    // Jika ada cafe_id, set ke activeCafeId
+    if (user.cafe_id) {
+      useAuthStore.getState().setActiveCafeId(user.cafe_id);
+    }
+
+    // Verify localStorage
+    const savedUser = localStorage.getItem('user');
+    console.log('User data setelah disimpan:', JSON.parse(savedUser || '{}'));
+    console.log('Store state:', useAuthStore.getState());
+
+    return user;
   },
 
   logout: (): void => {
-    localStorage.removeItem('access_token');
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    useAuthStore.getState().logout();
   },
 
   getToken: (): string | null => {
     if (typeof window === 'undefined') return null;
-    return localStorage.getItem('access_token');
+    return localStorage.getItem('token');
+  },
+
+  getUser: (): AuthUser | null => {
+    if (typeof window === 'undefined') return null;
+    const userStr = localStorage.getItem('user');
+    return userStr ? JSON.parse(userStr) : null;
   },
 };

@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Plus, Edit2, Trash2, Search, X, Save, RefreshCw } from 'lucide-react';
 import { Ingredient } from '@/types';
 import { formatCurrency } from '@/lib/utils';
-// import { api } from '@/services/api'; // Aktifkan jika integrasi API sudah berjalan
+import { api } from '@/services/api';
+import { useAuthStore } from '@/lib/store';
 
 export default function IngredientsPage() {
   const [ingredients, setIngredients] = useState<Ingredient[]>([]);
@@ -12,6 +13,9 @@ export default function IngredientsPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingIngredient, setEditingIngredient] = useState<Ingredient | null>(null);
+
+  // Get activeCafeId dari Zustand store (bisa berubah dari navbar dropdown)
+  const activeCafeId = useAuthStore((state) => state.activeCafeId);
 
   // State Form Input
   const [formData, setFormData] = useState({
@@ -22,31 +26,31 @@ export default function IngredientsPage() {
   });
 
   // Fungsi fetch data dari FastAPI
-  const fetchIngredients = async () => {
+  const fetchIngredients = useCallback(async () => {
     setIsLoading(true);
     try {
-      // JIKA ENDPOINT FASTAPI SUDAH SIAP, AKTIFKAN KODE DI BAWAH:
-      // const response = await api.get<{ data: Ingredient[] }>('/api/ingredients');
-      // setIngredients(response.data);
+      // Gunakan activeCafeId dari store (bisa berubah dari navbar dropdown)
+      if (!activeCafeId) {
+        setIsLoading(false);
+        return;
+      }
 
-      // DATA DUMMY SEBELUM INTEGRASI DATABASE
-      const dummyIngredients: Ingredient[] = [
-        { id: 'ing-1', name: 'Biji Kopi Arabika', stock: 2500, unit: 'gram', cost: 150 },
-        { id: 'ing-2', name: 'Susu Segar Diamond', stock: 5000, unit: 'ml', cost: 20 },
-        { id: 'ing-3', name: 'Gula Aren Cair', stock: 1500, unit: 'ml', cost: 25 },
-        { id: 'ing-4', name: 'Gelas Plastik', stock: 150, unit: 'pcs', cost: 500 },
-      ];
-      setIngredients(dummyIngredients);
-    } catch (error) {
+      const response = await api.get<{ status: string; data: Ingredient[] }>(`/api/ingredients/?cafe_id=${activeCafeId}`);
+      // FastAPI mereturn: { status: "success", data: [...] }
+      setIngredients(response.data.data || []);
+    } catch (error: unknown) {
       console.error('Gagal memuat data bahan baku:', error);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [activeCafeId]);
 
+  // Auto-refresh ketika activeCafeId berubah (user ganti cafe dari navbar)
   useEffect(() => {
-    fetchIngredients();
-  }, []);
+    if (activeCafeId) {
+      fetchIngredients();
+    }
+  }, [activeCafeId, fetchIngredients]);
 
   // Membuka Modal Tambah Baru
   const handleOpenAddModal = () => {
@@ -72,27 +76,49 @@ export default function IngredientsPage() {
     e.preventDefault();
     if (!formData.name.trim()) return;
 
+    // Gunakan activeCafeId dari store
+    if (!activeCafeId) {
+      alert('Error: Silakan pilih cafe terlebih dahulu dari dropdown di navbar');
+      return;
+    }
+
     try {
+      const payload = {
+        cafe_id: activeCafeId,
+        ...formData,
+      };
+
       if (editingIngredient) {
-        // PILIHAN EDIT: Kirim PUT ke FastAPI
-        // await api.put(`/api/ingredients/${editingIngredient.id}`, formData);
-        
-        setIngredients(
-          ingredients.map((ing) =>
-            ing.id === editingIngredient.id ? { ...ing, ...formData } : ing
-          )
-        );
+        // EDIT: Kirim PUT ke FastAPI
+        await api.put(`/api/ingredients/${editingIngredient.id}`, payload);
       } else {
-        // PILIHAN TAMBAH: Kirim POST ke FastAPI
-        // const response = await api.post('/api/ingredients', formData);
-        const newId = `ing-${Date.now()}`;
-        
-        setIngredients([...ingredients, { id: newId, ...formData }]);
+        // TAMBAH: Kirim POST ke FastAPI
+        await api.post('/api/ingredients/', payload);
       }
+      
       setIsModalOpen(false);
-    } catch (error) {
+      setFormData({ name: '', stock: 0, unit: 'gram', cost: 0 });
+      fetchIngredients(); // Refresh data setelah simpan
+    } catch (error: unknown) {
       console.error('Gagal menyimpan bahan baku:', error);
-      alert('Gagal menyimpan perubahan ke server.');
+      
+      let errorMessage = 'Gagal menyimpan perubahan ke server.';
+      
+      if (error instanceof Error) {
+        if (error.message === 'Network Error - Pastikan API Server sedang berjalan') {
+          errorMessage = error.message;
+        } else if ('response' in error && typeof error.response === 'object' && error.response !== null && 'data' in error.response && typeof error.response.data === 'object' && error.response.data !== null && 'detail' in error.response.data) {
+          errorMessage = (error.response.data as { detail: string }).detail;
+        } else if ('detail' in error && typeof error.detail === 'string') {
+          errorMessage = error.detail;
+        } else {
+          errorMessage = error.message;
+        }
+      } else if (typeof error === 'object' && error !== null && 'detail' in error && typeof error.detail === 'string') {
+        errorMessage = error.detail;
+      }
+      
+      alert(`Error: ${errorMessage}`);
     }
   };
 
@@ -104,11 +130,12 @@ export default function IngredientsPage() {
       )
     ) {
       try {
-        // PILIHAN HAPUS: Kirim DELETE ke FastAPI
-        // await api.delete(`/api/ingredients/${id}`);
+        // HAPUS: Kirim DELETE ke FastAPI
+        await api.delete(`/api/ingredients/${id}`);
         setIngredients(ingredients.filter((ing) => ing.id !== id));
       } catch (error) {
         console.error('Gagal menghapus data:', error);
+        alert('Gagal menghapus data dari server.');
       }
     }
   };
@@ -186,7 +213,6 @@ export default function IngredientsPage() {
                   >
                     <td className="px-6 py-4">
                       <p className="font-semibold text-gray-800">{item.name}</p>
-                      <p className="text-xs text-gray-400 font-mono">{item.id}</p>
                     </td>
                     <td className="px-6 py-4 text-center font-bold text-gray-700">
                       {item.stock}
