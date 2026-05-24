@@ -32,6 +32,7 @@ interface Ingredient {
   id: string;
   name: string;
   unit: string;
+  cost?: number; // HPP per unit dari supplier/pembelian
 }
 
 export default function MenusPage() {
@@ -67,6 +68,24 @@ export default function MenusPage() {
   
   // State khusus baris resep yang sedang diracik di dalam modal form menu
   const [recipeItems, setRecipeItems] = useState<RecipeItemInput[]>([]);
+
+  // Fungsi untuk menghitung total HPP dari resep
+  const calculateTotalCost = (): number => {
+    return recipeItems.reduce((total, item) => {
+      const ingredient = ingredients.find((i) => i.id === item.ingredientId);
+      const unitCost = ingredient?.cost || 0;
+      return total + (unitCost * item.quantity);
+    }, 0);
+  };
+
+  // Fungsi untuk menghitung profit
+  const calculateProfit = (): { profit: number; percentage: number } => {
+    const totalCost = calculateTotalCost();
+    const sellingPrice = menuForm.price;
+    const profit = sellingPrice - totalCost;
+    const percentage = sellingPrice > 0 ? (profit / sellingPrice) * 100 : 0;
+    return { profit, percentage };
+  };
 
   // Mengambil seluruh data awal (Menu, Kategori, Bahan Baku) dari FastAPI
   const fetchData = useCallback(async () => {
@@ -247,13 +266,17 @@ export default function MenusPage() {
       };
 
       if (editingMenu) {
-        // JIKA EDIT MENU (Nanti arahkan ke PUT endpoint jika sudah dibuat di FastAPI)
-        alert('Fitur edit menu akan segera terhubung. Sementara simpan sebagai menu baru.');
+        // EDIT MENU - Kirim PUT request ke FastAPI
+        const response = await api.put(`/api/menus/${editingMenu.id}`, payload);
+        
+        if (response.data.status === 'success' || response.status === 200) {
+          alert(`Menu "${menuForm.name}" berhasil diperbarui!`);
+        }
       } else {
         // TAMBAH MENU BARU
         const response = await api.post('/api/menus/', payload);
         
-        if (response.data.status === 'success') {
+        if (response.data.status === 'success' || response.status === 201) {
           alert(`Menu "${menuForm.name}" berhasil ditambahkan ke kasir!`);
         }
       }
@@ -546,7 +569,8 @@ export default function MenusPage() {
 
               {/* DINAMIS SUB-FORM RACIKAN RESEP (Hanya Muncul Jika trackStock = TRUE) */}
               {menuForm.trackStock && (
-                <div className="border border-purple-100 bg-purple-50/30 rounded-lg p-4 space-y-3">
+                <div className="space-y-4">
+                  <div className="border border-purple-100 bg-purple-50/30 rounded-lg p-4 space-y-3">
                   <div className="flex items-center justify-between border-b border-purple-100 pb-2">
                     <h4 className="text-xs font-bold text-purple-800 uppercase tracking-wider flex items-center gap-1">
                       <Coffee size={14} /> Racikan Komposisi Resep
@@ -608,6 +632,63 @@ export default function MenusPage() {
                           </div>
                         );
                       })}
+                    </div>
+                  )}
+                  </div>
+
+                  {/* KALKULATOR HPP & PROFIT REAL-TIME */}
+                  {recipeItems.length > 0 && (
+                    <div className="border-2 border-purple-200 bg-gradient-to-br from-purple-50 to-purple-100/50 rounded-lg p-4 space-y-3">
+                      <h4 className="text-xs font-bold text-purple-900 uppercase tracking-wider">📊 Analisis Profitabilitas</h4>
+                      
+                      <div className="grid grid-cols-2 gap-3">
+                        {/* Box HPP Total */}
+                        <div className="bg-white/80 border border-purple-200 rounded-lg p-3">
+                          <p className="text-[11px] text-purple-600 font-semibold mb-1">HPP Total Resep</p>
+                          <p className="text-lg font-bold text-purple-900">{formatCurrency(calculateTotalCost())}</p>
+                          <p className="text-[10px] text-purple-500 mt-1">({recipeItems.length} bahan)</p>
+                        </div>
+
+                        {/* Box Harga Jual */}
+                        <div className="bg-white/80 border border-purple-200 rounded-lg p-3">
+                          <p className="text-[11px] text-purple-600 font-semibold mb-1">Harga Jual Menu</p>
+                          <p className="text-lg font-bold text-purple-900">{formatCurrency(menuForm.price)}</p>
+                          <p className="text-[10px] text-purple-500 mt-1">Harga kasir</p>
+                        </div>
+                      </div>
+
+                      {/* Profit Indicator */}
+                      {(() => {
+                        const { profit, percentage } = calculateProfit();
+                        const isProfit = profit > 0;
+                        return (
+                          <div className={`border-l-4 rounded p-3 ${isProfit ? 'bg-green-50 border-green-400' : 'bg-red-50 border-red-400'}`}>
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <p className={`text-xs font-bold ${isProfit ? 'text-green-700' : 'text-red-700'}`}>
+                                  {isProfit ? '✓ Keuntungan' : '⚠ Rugi'}
+                                </p>
+                                <p className={`text-sm font-bold mt-0.5 ${isProfit ? 'text-green-900' : 'text-red-900'}`}>
+                                  {formatCurrency(profit)}
+                                </p>
+                              </div>
+                              <div className="text-right">
+                                <p className={`text-2xl font-bold ${isProfit ? 'text-green-600' : 'text-red-600'}`}>
+                                  {percentage.toFixed(1)}%
+                                </p>
+                                <p className={`text-[10px] font-semibold ${isProfit ? 'text-green-600' : 'text-red-600'}`}>
+                                  Margin Profit
+                                </p>
+                              </div>
+                            </div>
+                            {percentage < 20 && isProfit && (
+                              <p className="text-[10px] text-amber-700 mt-2 bg-amber-100/50 px-2 py-1 rounded">
+                                💡 Margin di bawah 20%. Pertimbangkan naikkan harga atau kurangi bahan.
+                              </p>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </div>
                   )}
                 </div>

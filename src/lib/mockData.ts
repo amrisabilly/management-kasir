@@ -132,6 +132,7 @@ export const mockChartData: ChartData[] = [
 
 export const mockStockOpname: StockOpname = {
   id: 'so-001',
+  cafe_id: 'cafe-001',
   date: new Date('2024-05-07'),
   products: [
     {

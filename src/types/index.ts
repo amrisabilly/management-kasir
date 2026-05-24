@@ -75,10 +75,32 @@ export interface Ingredient {
 // Stock Opname types
 export interface StockOpname {
   id: string;
-  date: Date;
+  cafe_id: string;
+  date: Date | string;
   products: StockOpnameItem[];
   totalValue: number;
   notes: string;
+}
+
+// Stock Opname from Supabase
+export interface StockOpnameFromDB {
+  id: string;
+  cafe_id: string;
+  created_at: string;
+  total_value: number;
+  notes: string;
+}
+
+export interface StockOpnameItemFromDB {
+  id: string;
+  stock_opname_id: string;
+  ingredient_id: string;
+  ingredient_name: string;
+  unit: string;
+  system_stock: number;
+  physical_stock: number;
+  difference: number;
+  cost: number;
 }
 
 export interface StockOpnameItem {

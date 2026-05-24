@@ -59,8 +59,16 @@ export const formatCurrency = (value: number): string => {
 };
 
 // Format date
-export const formatDate = (date: Date | string): string => {
+export const formatDate = (date: Date | string | null | undefined): string => {
+  if (!date) return 'Tanggal tidak tersedia';
+  
   const d = typeof date === 'string' ? new Date(date) : date;
+  
+  // Check if date is valid
+  if (isNaN(d.getTime())) {
+    return 'Tanggal tidak valid';
+  }
+  
   return d.toLocaleDateString('id-ID', {
     year: 'numeric',
     month: 'long',
